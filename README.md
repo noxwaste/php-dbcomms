@@ -104,7 +104,7 @@ PDO::MYSQL_ATTR_SSL_CERT => '/path/to/client-cert.pem',
 PDO::MYSQL_ATTR_SSL_KEY => '/path/to/client-key.pem'
 ```
 
-## 2. Insert a Row
+### 2. Insert a Row
 
 Insert a new row into the specified table. This operation is wrapped in a transaction to ensure data integrity.
 
@@ -112,7 +112,7 @@ Insert a new row into the specified table. This operation is wrapped in a transa
 $db->insertRow('users', 'username,email,password', 'john_doe,john@example.com,hashed_password');
 ```
 
-## 3. Fetch a Single Row
+### 3. Fetch a Single Row
 
 Retrieve a single row from a table based on specific conditions.
 
@@ -121,7 +121,7 @@ $user = $db->getRow('users', 'username', '=', 'john_doe');
 print_r($user);
 ```
 
-## 4. Fetch Multiple Rows
+### 4. Fetch Multiple Rows
 
 Retrieve multiple rows from a table based on specific conditions, sorted, and paginated.
 
@@ -130,7 +130,7 @@ $users = $db->getRows('users', 'status', '=', 'active', 'created_at', 'DESC', 10
 print_r($users);
 ```
 
-## 5. Update a Row
+### 5. Update a Row
 
 Update a row in the specified table based on specific conditions. This operation uses a transaction to maintain consistency.
 
@@ -138,7 +138,7 @@ Update a row in the specified table based on specific conditions. This operation
 $db->updateRow('users', 'email', 'john_new@example.com', 'username', '=', 'john_doe');
 ```
 
-## 6. Delete a Row
+### 6. Delete a Row
 
 Delete a row from the specified table based on specific conditions. This operation is also wrapped in a transaction.
 
@@ -146,7 +146,7 @@ Delete a row from the specified table based on specific conditions. This operati
 $db->deleteRow('users', 'username', '=', 'john_doe');
 ```
 
-## 7. Count Rows
+### 7. Count Rows
 
 Count the number of rows in a table that match specific conditions.
 
@@ -155,7 +155,7 @@ $count = $db->countRows('users', 'status', '=', 'active');
 echo "Active users: " . $count;
 ```
 
-## 8. Get Aggregate Data
+### 8. Get Aggregate Data
 
 Fetch aggregate data (e.g., SUM, AVG) from a specific column in a table based on certain conditions.
 
@@ -164,7 +164,7 @@ $totalSalary = $db->getAggregate('employees', 'SUM', 'salary', 'department', '='
 echo "Total Salary in IT Department: " . $totalSalary;
 ```
 
-## 9. Transaction Management
+### 9. Transaction Management
 
 Manage database transactions manually when performing multiple operations that need to be atomic.
 
@@ -180,7 +180,7 @@ try {
 }
 ```
 
-## 10. Disconnect from the Database
+### 10. Disconnect from the Database
 
 Ensure to disconnect from the database when operations are complete.
 
