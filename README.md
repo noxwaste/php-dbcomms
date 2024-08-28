@@ -126,7 +126,7 @@ print_r($user);
 Retrieve multiple rows from a table based on specific conditions, sorted, and paginated.
 
 ```php
-$users = $db->getRows('users', 'status', '=', 'active', 'created_at', 'DESC', 10, 0); // Fetch 10 rows, starting from offset 0
+$users = $db->getRows('users', '[status]', '[=]', '[active]', 'created_at', 'DESC', 10, 0); // Fetch 10 rows, starting from offset 0
 print_r($users);
 ```
 
@@ -135,7 +135,7 @@ print_r($users);
 Update a row in the specified table based on specific conditions. This operation uses a transaction to maintain consistency.
 
 ```php
-$db->updateRow('users', 'email', 'john_new@example.com', 'username', '=', 'john_doe');
+$db->updateRow('users', 'email', 'john_new@example.com', '[username]', '[=]', '[john_doe]');
 ```
 
 ### 6. Delete a Row
@@ -143,7 +143,7 @@ $db->updateRow('users', 'email', 'john_new@example.com', 'username', '=', 'john_
 Delete a row from the specified table based on specific conditions. This operation is also wrapped in a transaction.
 
 ```php
-$db->deleteRow('users', 'username', '=', 'john_doe');
+$db->deleteRow('users', '[username]', '[=]', '[john_doe]');
 ```
 
 ### 7. Count Rows
@@ -151,7 +151,7 @@ $db->deleteRow('users', 'username', '=', 'john_doe');
 Count the number of rows in a table that match specific conditions.
 
 ```php
-$count = $db->countRows('users', 'status', '=', 'active');
+$count = $db->countRows('users', '[status]', '[=]', '[active]');
 echo "Active users: " . $count;
 ```
 
@@ -160,27 +160,11 @@ echo "Active users: " . $count;
 Fetch aggregate data (e.g., SUM, AVG) from a specific column in a table based on certain conditions.
 
 ```php
-$totalSalary = $db->getAggregate('employees', 'SUM', 'salary', 'department', '=', 'IT');
+$totalSalary = $db->getAggregate('employees', 'SUM', 'salary', '[department]', '[=]', '[IT]');
 echo "Total Salary in IT Department: " . $totalSalary;
 ```
 
-### 9. Transaction Management
-
-Manage database transactions manually when performing multiple operations that need to be atomic.
-
-```php
-$db->beginTransaction();
-try {
-    $db->insertRow('orders', 'user_id,product_id,quantity', '1,2,5');
-    $db->updateRow('inventory', 'stock', 'stock - 5', 'product_id', '=', '2');
-    $db->commit();
-} catch (Exception $e) {
-    $db->rollBack();
-    echo "Failed: " . $e->getMessage();
-}
-```
-
-### 10. Disconnect from the Database
+### 9. Disconnect from the Database
 
 Ensure to disconnect from the database when operations are complete.
 
