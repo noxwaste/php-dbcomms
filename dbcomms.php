@@ -179,12 +179,19 @@ class dbcomms {
         if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Update')) {
             return null;
         }
-
+    
         try {
             $this->beginTransaction();  // Start transaction
-            // Prepare the UPDATE statement
-            $query = "UPDATE `{$table}` SET `{$column}` = :value " . $this->buildQuery('', '', $conditions, $operators, '', $logicalOperator);
-            $paramsArray = array_merge([':value' => $value], $this->buildNamedParams($conditions, $params));  // Merge named parameters
+    
+            // Build the WHERE clause dynamically using the buildQuery method, but exclude the initial action and table name
+            $whereClause = $this->buildQuery('', '', $conditions, $operators, '', $logicalOperator);
+    
+            // Prepare the UPDATE statement correctly without an extra FROM clause
+            $query = "UPDATE `{$table}` SET `{$column}` = :value {$whereClause}";
+            
+            // Merge parameters for the SET and WHERE clauses
+            $paramsArray = array_merge([':value' => $value], $this->buildNamedParams($conditions, $params));
+    
             $this->executeQuery($query, $paramsArray);  // Execute the update query
             $this->commit();  // Commit transaction
         } catch (PDOException $e) {
