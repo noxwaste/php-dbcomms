@@ -117,7 +117,7 @@ $db->insertRow('users', 'username,email,password', 'john_doe,john@example.com,ha
 Retrieve a single row from a table based on specific conditions.
 
 ```php
-$user = $db->getRow('users', 'username', '=', 'john_doe');
+$user = $db->getRow('users', ['username'], ['='], ['john_doe']);
 print_r($user);
 ```
 
