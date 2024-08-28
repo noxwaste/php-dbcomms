@@ -183,7 +183,7 @@ class dbcomms {
         try {
             $this->beginTransaction();  // Start transaction
     
-            // Use the buildQuery method to construct the WHERE clause only
+            // Build the WHERE clause dynamically using the buildQuery method
             $whereClause = $this->buildQuery('', '', $conditions, $operators, '', $logicalOperator);
     
             // Prepare the UPDATE statement correctly
@@ -285,7 +285,7 @@ class dbcomms {
         if ($action === 'SELECT' || $action === 'DELETE') {
             $query = "{$action} FROM `{$table}`";  // Start building the SELECT or DELETE query
         } elseif ($action === 'UPDATE') {
-            $query = "UPDATE `{$table}`";  // Start building the UPDATE query
+            $query = "UPDATE `{$table}`";  // Start building the UPDATE query without FROM clause
         }
     
         // Add conditions if provided
@@ -301,7 +301,7 @@ class dbcomms {
         }
     
         // Append any additional clauses (like LIMIT, ORDER BY)
-        return "{$query} {$extra}";  // Return the complete query with any extra clauses
+        return trim("{$query} {$extra}");  // Return the complete query with any extra clauses, and trim any extra spaces
     }
 
     // Private method to build named parameters for a prepared statement
