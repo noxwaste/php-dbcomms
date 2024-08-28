@@ -74,7 +74,8 @@ class dbcomms {
         }
 
         $query = $this->buildQuery('SELECT *', $table, $conditions, $operators, 'LIMIT 1');
-        return $this->executeQuery($query, $this->buildParams($conditions, $params), true);
+        $queryParams = $this->buildNamedParams($conditions, $params); // Update parameter building
+        return $this->executeQuery($query, $queryParams, true);
     }
 
     public function getRows($table, $conditions = [], $operators = [], $params = [], $orderBy = 'id', $ascOrDesc = 'ASC', $limit = null, $offset = null) {
@@ -91,7 +92,8 @@ class dbcomms {
         }
 
         $query = $this->buildQuery('SELECT *', $table, $conditions, $operators, $extra);
-        return $this->executeQuery($query, $this->buildParams($conditions, $params));
+        $queryParams = $this->buildNamedParams($conditions, $params); // Update parameter building
+        return $this->executeQuery($query, $queryParams);
     }
 
     public function insertRow($table, $columns = [], $params = []) {
@@ -103,12 +105,19 @@ class dbcomms {
             $this->beginTransaction();
             $placeholders = ':' . implode(', :', $columns);
             $query = "INSERT INTO `{$table}` (`" . implode('`, `', $columns) . "`) VALUES ({$placeholders})";
-            $this->executeQuery($query, $this->buildParams($columns, $params));
+            
+            // Build parameters array to match column names
+            $queryParams = [];
+            foreach ($columns as $index => $column) {
+                $queryParams[":{$column}"] = $params[$index];
+            }
+
+            $this->executeQuery($query, $queryParams);
             $this->commit();
         } catch (PDOException $e) {
             $this->handleError("Insert failed", $e->getMessage(), [
                 'query' => $query,
-                'params' => $params
+                'params' => $queryParams
             ]);
             $this->rollBack();
             return null;
@@ -123,7 +132,7 @@ class dbcomms {
         try {
             $this->beginTransaction();
             $query = "UPDATE `{$table}` SET `{$column}` = :value " . $this->buildQuery('', '', $conditions, $operators);
-            $paramsArray = array_merge([':value' => $value], $this->buildParams($conditions, $params));
+            $paramsArray = array_merge([':value' => $value], $this->buildNamedParams($conditions, $params)); // Update parameter building
             $this->executeQuery($query, $paramsArray);
             $this->commit();
         } catch (PDOException $e) {
@@ -144,12 +153,13 @@ class dbcomms {
         try {
             $this->beginTransaction();
             $query = $this->buildQuery('DELETE', $table, $conditions, $operators);
-            $this->executeQuery($query, $this->buildParams($conditions, $params));
+            $queryParams = $this->buildNamedParams($conditions, $params); // Update parameter building
+            $this->executeQuery($query, $queryParams);
             $this->commit();
         } catch (PDOException $e) {
             $this->handleError("Delete failed", $e->getMessage(), [
                 'query' => $query,
-                'params' => $params
+                'params' => $queryParams
             ]);
             $this->rollBack();
             return null;
@@ -162,12 +172,13 @@ class dbcomms {
         }
 
         $query = $this->buildQuery('SELECT COUNT(*) AS count', $table, $conditions, $operators);
-        $result = $this->executeQuery($query, $this->buildParams($conditions, $params), true);
+        $queryParams = $this->buildNamedParams($conditions, $params); // Update parameter building
+        $result = $this->executeQuery($query, $queryParams, true);
 
         if ($result === null) {
             return $this->handleError("Count failed", "Query returned null", [
                 'query' => $query,
-                'params' => $this->buildParams($conditions, $params)
+                'params' => $queryParams
             ]);
         }
 
@@ -180,12 +191,13 @@ class dbcomms {
         }
 
         $query = $this->buildQuery("SELECT {$aggregateFunction}(`{$column}`) AS aggregate", $table, $conditions, $operators);
-        $result = $this->executeQuery($query, $this->buildParams($conditions, $params), true);
+        $queryParams = $this->buildNamedParams($conditions, $params); // Update parameter building
+        $result = $this->executeQuery($query, $queryParams, true);
 
         if ($result === null) {
             return $this->handleError("Aggregate failed", "Query returned null", [
                 'query' => $query,
-                'params' => $this->buildParams($conditions, $params)
+                'params' => $queryParams
             ]);
         }
 
@@ -197,18 +209,18 @@ class dbcomms {
         $conditionStrings = [];
 
         foreach ($conditions as $index => $condition) {
-            $conditionStrings[] = "`{$condition}` {$operators[$index]} :param{$index}";
+            $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}"; // Match named parameters
         }
 
         $query .= implode(" AND ", $conditionStrings);
         return "{$query} {$extra}";
     }
 
-    private function buildParams($keys = [], $values = []) {
+    private function buildNamedParams($keys = [], $values = []) {
         $params = [];
 
         foreach ($keys as $index => $key) {
-            $params[":param{$index}"] = $values[$index];
+            $params[":{$key}"] = $values[$index];
         }
 
         return $params;
