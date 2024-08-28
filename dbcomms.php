@@ -183,10 +183,10 @@ class dbcomms {
         try {
             $this->beginTransaction();  // Start transaction
     
-            // Build the WHERE clause dynamically using the buildQuery method, but exclude the initial action and table name
+            // Use the buildQuery method to construct the WHERE clause only
             $whereClause = $this->buildQuery('', '', $conditions, $operators, '', $logicalOperator);
     
-            // Prepare the UPDATE statement correctly without an extra FROM clause
+            // Prepare the UPDATE statement correctly
             $query = "UPDATE `{$table}` SET `{$column}` = :value {$whereClause}";
             
             // Merge parameters for the SET and WHERE clauses
@@ -278,17 +278,29 @@ class dbcomms {
 
     // Private method to build a dynamic SQL query
     private function buildQuery($action, $table, $conditions = [], $operators = [], $extra = '', $logicalOperator = 'AND') {
-        $query = "{$action} FROM `{$table}`";  // Start building the query
+        // Initialize the query
+        $query = "";
+    
+        // Construct the base query depending on the action
+        if ($action === 'SELECT' || $action === 'DELETE') {
+            $query = "{$action} FROM `{$table}`";  // Start building the SELECT or DELETE query
+        } elseif ($action === 'UPDATE') {
+            $query = "UPDATE `{$table}`";  // Start building the UPDATE query
+        }
+    
+        // Add conditions if provided
         if (!empty($conditions)) {
-            $query .= " WHERE ";  // Add WHERE clause if there are conditions
             $conditionStrings = [];
-
+    
             foreach ($conditions as $index => $condition) {
                 $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";  // Match named parameters
             }
-
-            $query .= implode(" {$logicalOperator} ", $conditionStrings);  // Combine conditions with logical operator
+    
+            // Add WHERE clause for conditions
+            $query .= " WHERE " . implode(" {$logicalOperator} ", $conditionStrings);
         }
+    
+        // Append any additional clauses (like LIMIT, ORDER BY)
         return "{$query} {$extra}";  // Return the complete query with any extra clauses
     }
 
