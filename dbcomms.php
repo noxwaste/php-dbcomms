@@ -11,7 +11,7 @@ class dbcomms {
             $this->datab->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
             $this->isConnected = true;
         } catch (PDOException $e) {
-            $this->logError("Connection failed: " . $e->getMessage());
+            $this->handleError("Connection failed", $e->getMessage());
             $this->isConnected = false;
         }
     }
@@ -21,30 +21,26 @@ class dbcomms {
         $this->isConnected = false;
     }
 
-    public function beginTransaction() {
+    private function manageTransaction($action) {
         try {
-            $this->datab->beginTransaction();
+            $this->datab->{$action}();
         } catch (PDOException $e) {
-            $this->logError("Failed to begin transaction: " . $e->getMessage());
+            $this->handleError("Failed to {$action} transaction", $e->getMessage());
+            return false;
         }
+        return true;
+    }
+
+    public function beginTransaction() {
+        return $this->manageTransaction('beginTransaction');
     }
 
     public function commit() {
-        try {
-            $this->datab->commit();
-        } catch (PDOException $e) {
-            $this->logError("Failed to commit transaction: " . $e->getMessage());
-        }
+        return $this->manageTransaction('commit');
     }
 
     public function rollBack() {
-        try {
-            if ($this->datab->inTransaction()) {
-                $this->datab->rollBack();
-            }
-        } catch (PDOException $e) {
-            $this->logError("Failed to roll back transaction: " . $e->getMessage());
-        }
+        return $this->manageTransaction('rollBack');
     }
 
     private function executeQuery($query, $params = [], $single = false) {
@@ -53,20 +49,39 @@ class dbcomms {
             $stmt->execute($params);
             return $single ? $stmt->fetch() : $stmt->fetchAll();
         } catch (PDOException $e) {
-            $this->logError("Query failed: {$query} with params " . json_encode($params) . " - Error: " . $e->getMessage());
-            if ($this->datab->inTransaction()) {
-                $this->rollBack();
-            }
+            $this->handleError("Query execution failed", $e->getMessage(), [
+                'query' => $query,
+                'params' => $params
+            ]);
             return null;
         }
     }
 
-    public function getRow($table, $conditions, $operators, $params) {
+    private function validateCounts($columns, $params, $action) {
+        if (count($columns) !== count($params)) {
+            $this->handleError("{$action} failed: Mismatch between column count and parameter count", [
+                'columns' => $columns,
+                'params' => $params
+            ]);
+            return false;
+        }
+        return true;
+    }
+
+    public function getRow($table, $conditions = [], $operators = [], $params = []) {
+        if (!$this->validateCounts($conditions, $params, 'Get row')) {
+            return null;
+        }
+
         $query = $this->buildQuery('SELECT *', $table, $conditions, $operators, 'LIMIT 1');
         return $this->executeQuery($query, $this->buildParams($conditions, $params), true);
     }
 
-    public function getRows($table, $conditions, $operators, $params, $orderBy = 'id', $ascOrDesc = 'ASC', $limit = null, $offset = null) {
+    public function getRows($table, $conditions = [], $operators = [], $params = [], $orderBy = 'id', $ascOrDesc = 'ASC', $limit = null, $offset = null) {
+        if (!$this->validateCounts($conditions, $params, 'Get rows')) {
+            return null;
+        }
+
         $extra = "ORDER BY `{$orderBy}` {$ascOrDesc}";
         if ($limit !== null) {
             $extra .= " LIMIT {$limit}";
@@ -74,104 +89,147 @@ class dbcomms {
                 $extra .= " OFFSET {$offset}";
             }
         }
+
         $query = $this->buildQuery('SELECT *', $table, $conditions, $operators, $extra);
         return $this->executeQuery($query, $this->buildParams($conditions, $params));
     }
 
-    public function insertRow($table, $columns, $params) {
+    public function insertRow($table, $columns = [], $params = []) {
+        if (!$this->validateCounts($columns, $params, 'Insert')) {
+            return null;
+        }
+
         try {
             $this->beginTransaction();
-            $columnsArray = explode(",", $columns);
-            $placeholders = ':' . implode(', :', $columnsArray);
-            $query = "INSERT INTO `{$table}` (`" . implode('`, `', $columnsArray) . "`) VALUES ({$placeholders})";
-            $this->executeQuery($query, $this->buildParams($columnsArray, $params));
+            $placeholders = ':' . implode(', :', $columns);
+            $query = "INSERT INTO `{$table}` (`" . implode('`, `', $columns) . "`) VALUES ({$placeholders})";
+            $this->executeQuery($query, $this->buildParams($columns, $params));
             $this->commit();
         } catch (PDOException $e) {
-            $this->logError("Insert failed: {$query} with params " . json_encode($params) . " - Error: " . $e->getMessage());
+            $this->handleError("Insert failed", $e->getMessage(), [
+                'query' => $query,
+                'params' => $params
+            ]);
             $this->rollBack();
+            return null;
         }
     }
 
-    public function updateRow($table, $column, $value, $conditions, $operators, $params) {
+    public function updateRow($table, $column, $value, $conditions = [], $operators = [], $params = []) {
+        if (!$this->validateCounts($conditions, $params, 'Update')) {
+            return null;
+        }
+
         try {
             $this->beginTransaction();
-            $conditionsArray = explode(",", $conditions);
-            $operatorsArray = explode(",", $operators);
-            $query = "UPDATE `{$table}` SET `{$column}` = :value " . $this->buildQuery('', '', $conditionsArray, $operatorsArray);
-            $paramsArray = array_merge([':value' => $value], $this->buildParams($conditionsArray, $params));
+            $query = "UPDATE `{$table}` SET `{$column}` = :value " . $this->buildQuery('', '', $conditions, $operators);
+            $paramsArray = array_merge([':value' => $value], $this->buildParams($conditions, $params));
             $this->executeQuery($query, $paramsArray);
             $this->commit();
         } catch (PDOException $e) {
-            $this->logError("Update failed: {$query} with params " . json_encode($paramsArray) . " - Error: " . $e->getMessage());
+            $this->handleError("Update failed", $e->getMessage(), [
+                'query' => $query,
+                'params' => $paramsArray
+            ]);
             $this->rollBack();
+            return null;
         }
     }
 
-    public function deleteRow($table, $conditions, $operators, $params) {
+    public function deleteRow($table, $conditions = [], $operators = [], $params = []) {
+        if (!$this->validateCounts($conditions, $params, 'Delete')) {
+            return null;
+        }
+
         try {
             $this->beginTransaction();
             $query = $this->buildQuery('DELETE', $table, $conditions, $operators);
             $this->executeQuery($query, $this->buildParams($conditions, $params));
             $this->commit();
         } catch (PDOException $e) {
-            $this->logError("Delete failed: {$query} with params " . json_encode($params) . " - Error: " . $e->getMessage());
+            $this->handleError("Delete failed", $e->getMessage(), [
+                'query' => $query,
+                'params' => $params
+            ]);
             $this->rollBack();
+            return null;
         }
     }
 
-    public function countRows($table, $conditions, $operators, $params) {
+    public function countRows($table, $conditions = [], $operators = [], $params = []) {
+        if (!$this->validateCounts($conditions, $params, 'Count rows')) {
+            return null;
+        }
+
         $query = $this->buildQuery('SELECT COUNT(*) AS count', $table, $conditions, $operators);
         $result = $this->executeQuery($query, $this->buildParams($conditions, $params), true);
 
         if ($result === null) {
-            $this->logError("Count failed: {$query} with params " . json_encode($this->buildParams($conditions, $params)));
-            return 0;
+            return $this->handleError("Count failed", "Query returned null", [
+                'query' => $query,
+                'params' => $this->buildParams($conditions, $params)
+            ]);
         }
 
         return $result['count'];
     }
 
-    public function getAggregate($table, $aggregateFunction, $column, $conditions, $operators, $params) {
+    public function getAggregate($table, $aggregateFunction, $column, $conditions = [], $operators = [], $params = []) {
+        if (!$this->validateCounts($conditions, $params, 'Get aggregate')) {
+            return null;
+        }
+
         $query = $this->buildQuery("SELECT {$aggregateFunction}(`{$column}`) AS aggregate", $table, $conditions, $operators);
         $result = $this->executeQuery($query, $this->buildParams($conditions, $params), true);
 
         if ($result === null) {
-            $this->logError("Aggregate failed: {$query} with params " . json_encode($this->buildParams($conditions, $params)));
-            return null;
+            return $this->handleError("Aggregate failed", "Query returned null", [
+                'query' => $query,
+                'params' => $this->buildParams($conditions, $params)
+            ]);
         }
 
         return $result['aggregate'];
     }
 
-    private function buildQuery($action, $table, $conditions, $operators, $extra = '') {
-        $conditionsArray = explode(",", $conditions);
-        $operatorsArray = explode(",", $operators);
+    private function buildQuery($action, $table, $conditions = [], $operators = [], $extra = '') {
         $query = "{$action} FROM `{$table}` WHERE ";
+        $conditionStrings = [];
 
-        for ($i = 0; $i < count($conditionsArray); $i++) {
-            $query .= "`{$conditionsArray[$i]}` {$operatorsArray[$i]} :param{$i}";
-            if (($i + 1) < count($conditionsArray)) {
-                $query .= " AND ";
-            }
+        foreach ($conditions as $index => $condition) {
+            $conditionStrings[] = "`{$condition}` {$operators[$index]} :param{$index}";
         }
 
+        $query .= implode(" AND ", $conditionStrings);
         return "{$query} {$extra}";
     }
 
-    private function buildParams($keys, $values) {
-        $keysArray = explode(",", $keys);
-        $valuesArray = explode(",", $values);
+    private function buildParams($keys = [], $values = []) {
         $params = [];
 
-        foreach ($keysArray as $index => $key) {
-            $params[":param{$index}"] = $valuesArray[$index];
+        foreach ($keys as $index => $key) {
+            $params[":param{$index}"] = $values[$index];
         }
 
         return $params;
     }
 
-    private function logError($message) {
-        file_put_contents($this->errorLogFile, date('Y-m-d H:i:s') . " - " . $message . PHP_EOL, FILE_APPEND);
+    private function logError($message, $context = []) {
+        $logMessage = date('Y-m-d H:i:s') . " - " . $message;
+        if (!empty($context)) {
+            $logMessage .= ' | Context: ' . json_encode($context);
+        }
+        file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND);
+    }
+
+    private function handleError($message, $errorDetail, $context = []) {
+        $this->logError($message, $context);
+        return [
+            'success' => false,
+            'message' => $message,
+            'error' => $errorDetail,
+            'context' => $context
+        ];
     }
 }
 ?>
