@@ -190,7 +190,7 @@ $db->disconnect();
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See the LICENSE.md file for more details.
+This project is licensed under the GNU General Public License v3.0. See the LICENSE file for more details.
 
 ## Contributing
 
