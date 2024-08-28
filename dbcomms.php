@@ -11,7 +11,7 @@ class dbcomms {
             $this->datab->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
             $this->isConnected = true;
         } catch (PDOException $e) {
-            $this->logError($e->getMessage());
+            $this->logError("Connection failed: " . $e->getMessage());
             $this->isConnected = false;
         }
     }
@@ -22,15 +22,29 @@ class dbcomms {
     }
 
     public function beginTransaction() {
-        $this->datab->beginTransaction();
+        try {
+            $this->datab->beginTransaction();
+        } catch (PDOException $e) {
+            $this->logError("Failed to begin transaction: " . $e->getMessage());
+        }
     }
 
     public function commit() {
-        $this->datab->commit();
+        try {
+            $this->datab->commit();
+        } catch (PDOException $e) {
+            $this->logError("Failed to commit transaction: " . $e->getMessage());
+        }
     }
 
     public function rollBack() {
-        $this->datab->rollBack();
+        try {
+            if ($this->datab->inTransaction()) {
+                $this->datab->rollBack();
+            }
+        } catch (PDOException $e) {
+            $this->logError("Failed to roll back transaction: " . $e->getMessage());
+        }
     }
 
     private function executeQuery($query, $params = [], $single = false) {
@@ -39,8 +53,10 @@ class dbcomms {
             $stmt->execute($params);
             return $single ? $stmt->fetch() : $stmt->fetchAll();
         } catch (PDOException $e) {
-            $this->logError($e->getMessage());
-            $this->rollBack(); // Rollback on error
+            $this->logError("Query failed: {$query} with params " . json_encode($params) . " - Error: " . $e->getMessage());
+            if ($this->datab->inTransaction()) {
+                $this->rollBack();
+            }
             return null;
         }
     }
@@ -71,7 +87,7 @@ class dbcomms {
             $this->executeQuery($query, $this->buildParams($columnsArray, $params));
             $this->commit();
         } catch (PDOException $e) {
-            $this->logError($e->getMessage());
+            $this->logError("Insert failed: {$query} with params " . json_encode($params) . " - Error: " . $e->getMessage());
             $this->rollBack();
         }
     }
@@ -86,7 +102,7 @@ class dbcomms {
             $this->executeQuery($query, $paramsArray);
             $this->commit();
         } catch (PDOException $e) {
-            $this->logError($e->getMessage());
+            $this->logError("Update failed: {$query} with params " . json_encode($paramsArray) . " - Error: " . $e->getMessage());
             $this->rollBack();
         }
     }
@@ -98,7 +114,7 @@ class dbcomms {
             $this->executeQuery($query, $this->buildParams($conditions, $params));
             $this->commit();
         } catch (PDOException $e) {
-            $this->logError($e->getMessage());
+            $this->logError("Delete failed: {$query} with params " . json_encode($params) . " - Error: " . $e->getMessage());
             $this->rollBack();
         }
     }
@@ -106,12 +122,24 @@ class dbcomms {
     public function countRows($table, $conditions, $operators, $params) {
         $query = $this->buildQuery('SELECT COUNT(*) AS count', $table, $conditions, $operators);
         $result = $this->executeQuery($query, $this->buildParams($conditions, $params), true);
+
+        if ($result === null) {
+            $this->logError("Count failed: {$query} with params " . json_encode($this->buildParams($conditions, $params)));
+            return 0;
+        }
+
         return $result['count'];
     }
 
     public function getAggregate($table, $aggregateFunction, $column, $conditions, $operators, $params) {
         $query = $this->buildQuery("SELECT {$aggregateFunction}(`{$column}`) AS aggregate", $table, $conditions, $operators);
         $result = $this->executeQuery($query, $this->buildParams($conditions, $params), true);
+
+        if ($result === null) {
+            $this->logError("Aggregate failed: {$query} with params " . json_encode($this->buildParams($conditions, $params)));
+            return null;
+        }
+
         return $result['aggregate'];
     }
 
@@ -119,17 +147,27 @@ class dbcomms {
         $conditionsArray = explode(",", $conditions);
         $operatorsArray = explode(",", $operators);
         $query = "{$action} FROM `{$table}` WHERE ";
+
         for ($i = 0; $i < count($conditionsArray); $i++) {
-            $query .= "`{$conditionsArray[$i]}` {$operatorsArray[$i]} :{$conditionsArray[$i]}";
-            if (($i + 1) < count($conditionsArray)) $query .= " AND ";
+            $query .= "`{$conditionsArray[$i]}` {$operatorsArray[$i]} :param{$i}";
+            if (($i + 1) < count($conditionsArray)) {
+                $query .= " AND ";
+            }
         }
+
         return "{$query} {$extra}";
     }
 
     private function buildParams($keys, $values) {
         $keysArray = explode(",", $keys);
         $valuesArray = explode(",", $values);
-        return array_combine(array_map(function($key) { return ":{$key}"; }, $keysArray), $valuesArray);
+        $params = [];
+
+        foreach ($keysArray as $index => $key) {
+            $params[":param{$index}"] = $valuesArray[$index];
+        }
+
+        return $params;
     }
 
     private function logError($message) {
