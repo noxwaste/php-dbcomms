@@ -1,6 +1,6 @@
 # dbcomms PHP Class
 
-**Version:** 1.1  
+**Version:** 1.4
 **Author:** rlford ([https://github.com/rlford](https://github.com/rlford))
 
 ## Overview
@@ -109,75 +109,59 @@ PDO::MYSQL_ATTR_SSL_KEY => '/path/to/client-key.pem'
 Retrieve a single row from a table based on specific conditions.
 
 ```php
-$user = $db->getRow('users', 'username', '=', 'john_doe');
+$user = $db->getRow('users', ['username'], ['='], ['john_doe']);
 print_r($user);
 ```
 
-### 4. Fetch Multiple Rows
+### 3. Fetch Multiple Rows
 
 Retrieve multiple rows from a table based on specific conditions, sorted, and paginated.
 
 ```php
-$users = $db->getRows('users', 'status', '=', 'active', 'created_at', 'DESC', 10, 0); // Fetch 10 rows, starting from offset 0
+$users = $db->getRows('users', ['status'], ['='], ['active'], 'created_at', 'DESC', 10, 0); // Fetch 10 rows, starting from offset 0
 print_r($users);
 ```
 
-### 3. Update a Row
+### 4. Update a Row
 
 Update a row in the specified table based on specific conditions. This operation uses a transaction to maintain consistency.
 
 ```php
-$db->updateRow('users', 'email', 'john_new@example.com', 'username', '=', 'john_doe');
+$db->updateRow('users', 'email', 'john_new@example.com', ['username'], ['='], ['john_doe']);
 ```
 
-### 4. Delete a Row
+### 5. Delete a Row
 
 Delete a row from the specified table based on specific conditions. This operation is also wrapped in a transaction.
 
 ```php
-$db->deleteRow('users', 'username', '=', 'john_doe');
+$db->deleteRow('users', ['username'], ['='], ['john_doe']);
 ```
 
-### 5. Count Rows
+### 6. Count Rows
 
 Count the number of rows in a table that match specific conditions.
 
 ```php
-$count = $db->countRows('users', 'status', '=', 'active');
+$count = $db->countRows('users', ['status'], ['='], ['active']);
 echo "Active users: " . $count;
 ```
 
-### 6. Get Aggregate Data
+### 7. Get Aggregate Data
 
 Fetch aggregate data (e.g., SUM, AVG) from a specific column in a table based on certain conditions.
 
 ```php
-$totalSalary = $db->getAggregate('employees', 'SUM', 'salary', 'department', '=', 'IT');
+$totalSalary = $db->getAggregate('employees', 'SUM', 'salary', ['department'], ['='], ['IT']);
 echo "Total Salary in IT Department: " . $totalSalary;
 ```
 
-### 7. Insert a Row
+### 8. Insert a Row
 
 Insert a new row into the specified table. This operation is wrapped in a transaction to ensure data integrity.
 
 ```php
-$db->insertRow('users', 'username,email,password', 'john_doe,john@example.com,hashed_password');
-```
-
-### 8. Transaction Management
-
-Manage database transactions manually when performing multiple operations that need to be atomic.
-
-```php
-$db->beginTransaction();
-try {
-    $db->insertRow('orders', 'user_id,product_id,quantity', '1,2,5');
-    $db->updateRow('inventory', 'stock', 'stock - 5', 'product_id', '=', '2');
-    $db->commit();
-} catch (Exception $e) {
-    $db->rollBack();
-    echo "Failed: " . $e->getMessage();
-}
+$db->insertRow('users', ['username','email','password'], ['john_doe','john@example.com','hashed_password']);
 ```
 
 ### 9. Disconnect from the Database
@@ -190,7 +174,7 @@ $db->disconnect();
 
 ## Error Handling and Logging
 
-The dbcomms class includes built-in error handling and logging. Errors are logged to a file (error_log.txt) with details about the error message, context, and timestamp. This helps in debugging and maintaining a history of issues encountered during database operations.
+The dbcomms class includes built-in error handling and logging. Errors are logged to a file `dbcomms.log` with details about the error message, context, and timestamp. This helps in debugging and maintaining a history of issues encountered during database operations.
 
 ## Transaction Management
 
