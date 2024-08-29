@@ -1,6 +1,7 @@
 # dbcomms PHP Class
 
 **Version:** 1.4
+
 **Author:** rlford ([https://github.com/rlford](https://github.com/rlford))
 
 ## Overview
