@@ -108,25 +108,21 @@ class dbcomms {
 
     // Public method to get a single row from a table based on conditions
     public function getRow($table, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        // Validate inputs and parameter counts
         if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Get row')) {
             return null;
         }
-
-        // Build the query dynamically
-        $query = $this->buildQuery('SELECT *', $table, $conditions, $operators, 'LIMIT 1', $logicalOperator);
-        $queryParams = $this->buildNamedParams($conditions, $params);  // Build named parameters
-        return $this->executeQuery($query, $queryParams, true);  // Execute and return a single result
+    
+        $query = $this->buildQuery('SELECT', $table, $conditions, $operators, 'LIMIT 1', $logicalOperator);
+        $queryParams = $this->buildNamedParams($conditions, $params);
+        return $this->executeQuery($query, $queryParams, true);
     }
 
     // Public method to get multiple rows from a table based on conditions
     public function getRows($table, $conditions = [], $operators = [], $params = [], $orderBy = 'id', $ascOrDesc = 'ASC', $limit = null, $offset = null, $logicalOperator = 'AND') {
-        // Validate inputs and parameter counts
         if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Get rows')) {
             return null;
         }
-
-        // Build the ORDER BY and LIMIT/OFFSET clauses
+    
         $extra = "ORDER BY `{$orderBy}` {$ascOrDesc}";
         if ($limit !== null) {
             $extra .= " LIMIT {$limit}";
@@ -134,11 +130,10 @@ class dbcomms {
                 $extra .= " OFFSET {$offset}";
             }
         }
-
-        // Build the query dynamically
-        $query = $this->buildQuery('SELECT *', $table, $conditions, $operators, $extra, $logicalOperator);
-        $queryParams = $this->buildNamedParams($conditions, $params);  // Build named parameters
-        return $this->executeQuery($query, $queryParams);  // Execute and return multiple results
+    
+        $query = $this->buildQuery('SELECT', $table, $conditions, $operators, $extra, $logicalOperator);
+        $queryParams = $this->buildNamedParams($conditions, $params);
+        return $this->executeQuery($query, $queryParams);
     }
 
     // Public method to insert a new row into a table
@@ -207,20 +202,17 @@ class dbcomms {
 
     // Public method to delete rows from a table based on conditions
     public function deleteRow($table, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        // Validate inputs and parameter counts
         if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Delete')) {
             return null;
         }
-
+    
         try {
-            $this->beginTransaction();  // Start transaction
-            // Prepare the DELETE statement
+            $this->beginTransaction();
             $query = $this->buildQuery('DELETE', $table, $conditions, $operators, '', $logicalOperator);
-            $queryParams = $this->buildNamedParams($conditions, $params);  // Build named parameters
-            $this->executeQuery($query, $queryParams);  // Execute the delete query
-            $this->commit();  // Commit transaction
+            $queryParams = $this->buildNamedParams($conditions, $params);
+            $this->executeQuery($query, $queryParams);
+            $this->commit();
         } catch (PDOException $e) {
-            // Roll back transaction and handle errors
             $this->handleError("Delete failed", $e->getMessage(), [
                 'query' => $query,
                 'params' => $queryParams
@@ -232,48 +224,43 @@ class dbcomms {
 
     // Public method to count the number of rows matching conditions in a table
     public function countRows($table, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        // Validate inputs and parameter counts
         if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Count rows')) {
             return null;
         }
-
-        // Build the COUNT query dynamically
-        $query = $this->buildQuery('SELECT COUNT(*) AS count', $table, $conditions, $operators, '', $logicalOperator);
-        $queryParams = $this->buildNamedParams($conditions, $params);  // Build named parameters
-        $result = $this->executeQuery($query, $queryParams, true);  // Execute the count query
-
+    
+        $query = $this->buildQuery('COUNT', $table, $conditions, $operators, '', $logicalOperator);
+        $queryParams = $this->buildNamedParams($conditions, $params);
+        $result = $this->executeQuery($query, $queryParams, true);
+    
         if ($result === null) {
-            // Handle case where no result is returned
             return $this->handleError("Count failed", "Query returned null", [
                 'query' => $query,
                 'params' => $queryParams
             ]);
         }
-
-        return $result['count'];  // Return the count result
+    
+        return $result['count'];
     }
 
     // Public method to perform aggregate functions (SUM, AVG, etc.) on a column
     public function getAggregate($table, $aggregateFunction, $column, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        // Validate inputs and parameter counts
         if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Get aggregate')) {
             return null;
         }
-
-        // Build the aggregate query dynamically
-        $query = $this->buildQuery("SELECT {$aggregateFunction}(`{$column}`) AS aggregate", $table, $conditions, $operators, '', $logicalOperator);
-        $queryParams = $this->buildNamedParams($conditions, $params);  // Build named parameters
-        $result = $this->executeQuery($query, $queryParams, true);  // Execute the aggregate query
-
+    
+        $extra = "{$aggregateFunction}(`{$column}`) AS aggregate";
+        $query = $this->buildQuery('AGGREGATE', $table, $conditions, $operators, $extra, $logicalOperator);
+        $queryParams = $this->buildNamedParams($conditions, $params);
+        $result = $this->executeQuery($query, $queryParams, true);
+    
         if ($result === null) {
-            // Handle case where no result is returned
             return $this->handleError("Aggregate failed", "Query returned null", [
                 'query' => $query,
                 'params' => $queryParams
             ]);
         }
-
-        return $result['aggregate'];  // Return the aggregate result
+    
+        return $result['aggregate'];
     }
 
     // Private method to build a dynamic SQL query
@@ -282,10 +269,25 @@ class dbcomms {
         $query = "";
     
         // Construct the base query depending on the action
-        if ($action === 'SELECT' || $action === 'DELETE') {
-            $query = "{$action} FROM `{$table}`";  // Start building the SELECT or DELETE query
-        } elseif ($action === 'UPDATE') {
-            $query = "UPDATE `{$table}`";  // Start building the UPDATE query without FROM clause
+        switch ($action) {
+            case 'SELECT':
+                $query = "SELECT * FROM `{$table}`";  // Start building the SELECT query
+                break;
+            case 'COUNT':
+                $query = "SELECT COUNT(*) AS count FROM `{$table}`";  // Start building the COUNT query
+                break;
+            case 'AGGREGATE':
+                // For aggregate, the $extra should contain the aggregate function and column
+                $query = "SELECT {$extra} FROM `{$table}`";  // Build the aggregate query
+                break;
+            case 'DELETE':
+                $query = "DELETE FROM `{$table}`";  // Start building the DELETE query
+                break;
+            case 'UPDATE':
+                $query = "UPDATE `{$table}`";  // Start building the UPDATE query
+                break;
+            default:
+                return $this->handleError("Invalid action", "The action {$action} is not supported in buildQuery.");
         }
     
         // Add conditions if provided
