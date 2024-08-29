@@ -1,6 +1,6 @@
 # dbcomms PHP Class
 
-**Version:** 1.2  
+**Version:** 1.1  
 **Author:** rlford ([https://github.com/rlford](https://github.com/rlford))
 
 ## Overview
@@ -62,20 +62,54 @@ $options = [
 $db = new dbcomms('dbhost', 'dbname', 'dbuser', 'dbpass', $options);
 ```
 
-### 2. Insert a Row
+**Useful PDO Options**
 
-Insert a new row into the specified table. This operation is wrapped in a transaction to ensure data integrity.
+Here are some common and useful PDO options you might want to consider:
+
+`PDO::ATTR_PERSISTENT`: Enables persistent connections to the database, which can improve performance by reducing the overhead of establishing new connections repeatedly. Use this with caution, as it may not be suitable for all applications.
 
 ```php
-$db->insertRow('users', ['username', 'email', 'password'], ['john_doe', 'john@example.com', 'hashed_password']);
+PDO::ATTR_PERSISTENT => true
 ```
 
-### 3. Fetch a Single Row
+`PDO::ATTR_ERRMODE`: Controls the error reporting mode. The most common setting is PDO::ERRMODE_EXCEPTION, which throws exceptions on errors, making it easier to handle and debug them.
+
+```php
+PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+```
+
+`PDO::ATTR_DEFAULT_FETCH_MODE`: Sets the default fetch mode for result sets. PDO::FETCH_ASSOC is often used to return results as associative arrays.
+
+```php
+PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+```
+
+`PDO::MYSQL_ATTR_INIT_COMMAND`: Specifies a command to execute when connecting to the MySQL server, such as setting the character set. This can ensure that the connection uses UTF-8 encoding, which is recommended for supporting a wide range of characters.
+
+```php
+PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+```
+
+`PDO::ATTR_TIMEOUT`: Sets a timeout period (in seconds) for database connection attempts. This is useful to prevent hanging indefinitely if the database server is unreachable.
+
+```php
+PDO::ATTR_TIMEOUT => 30
+```
+
+`PDO::MYSQL_ATTR_SSL_CA`, `PDO::MYSQL_ATTR_SSL_CERT`, `PDO::MYSQL_ATTR_SSL_KEY`: These options are used for SSL encryption in MySQL connections. They specify the paths to the certificate authority file, client certificate file, and client key file, respectively, to establish a secure connection to the database.
+
+```php
+PDO::MYSQL_ATTR_SSL_CA => '/path/to/ca-cert.pem',
+PDO::MYSQL_ATTR_SSL_CERT => '/path/to/client-cert.pem',
+PDO::MYSQL_ATTR_SSL_KEY => '/path/to/client-key.pem'
+```
+
+### 2. Fetch a Single Row
 
 Retrieve a single row from a table based on specific conditions.
 
 ```php
-$user = $db->getRow('users', ['username'], ['='], ['john_doe']);
+$user = $db->getRow('users', 'username', '=', 'john_doe');
 print_r($user);
 ```
 
@@ -84,42 +118,66 @@ print_r($user);
 Retrieve multiple rows from a table based on specific conditions, sorted, and paginated.
 
 ```php
-$users = $db->getRows('users', ['status'], ['='], ['active'], 'created_at', 'DESC', 10, 0); // Fetch 10 rows, starting from offset 0
+$users = $db->getRows('users', 'status', '=', 'active', 'created_at', 'DESC', 10, 0); // Fetch 10 rows, starting from offset 0
 print_r($users);
 ```
 
-### 5. Update a Row
+### 3. Update a Row
 
-Update a row in the specified table based on specific conditions.
-
-```php
-$db->updateRow('users', 'email', 'john_new@example.com', ['username'], ['='], ['john_doe']);
-```
-
-### 6. Delete a Row
-
-Delete a row from the specified table based on specific conditions.
+Update a row in the specified table based on specific conditions. This operation uses a transaction to maintain consistency.
 
 ```php
-$db->deleteRow('users', ['username'], ['='], ['john_doe']);
+$db->updateRow('users', 'email', 'john_new@example.com', 'username', '=', 'john_doe');
 ```
 
-### 7. Count Rows
+### 4. Delete a Row
+
+Delete a row from the specified table based on specific conditions. This operation is also wrapped in a transaction.
+
+```php
+$db->deleteRow('users', 'username', '=', 'john_doe');
+```
+
+### 5. Count Rows
 
 Count the number of rows in a table that match specific conditions.
 
 ```php
-$count = $db->countRows('users', ['status'], ['='], ['active']);
+$count = $db->countRows('users', 'status', '=', 'active');
 echo "Active users: " . $count;
 ```
 
-### 8. Get Aggregate Data
+### 6. Get Aggregate Data
 
 Fetch aggregate data (e.g., SUM, AVG) from a specific column in a table based on certain conditions.
 
 ```php
-$totalSalary = $db->getAggregate('employees', 'SUM', 'salary', ['department'], ['='], ['IT']);
+$totalSalary = $db->getAggregate('employees', 'SUM', 'salary', 'department', '=', 'IT');
 echo "Total Salary in IT Department: " . $totalSalary;
+```
+
+### 7. Insert a Row
+
+Insert a new row into the specified table. This operation is wrapped in a transaction to ensure data integrity.
+
+```php
+$db->insertRow('users', 'username,email,password', 'john_doe,john@example.com,hashed_password');
+```
+
+### 8. Transaction Management
+
+Manage database transactions manually when performing multiple operations that need to be atomic.
+
+```php
+$db->beginTransaction();
+try {
+    $db->insertRow('orders', 'user_id,product_id,quantity', '1,2,5');
+    $db->updateRow('inventory', 'stock', 'stock - 5', 'product_id', '=', '2');
+    $db->commit();
+} catch (Exception $e) {
+    $db->rollBack();
+    echo "Failed: " . $e->getMessage();
+}
 ```
 
 ### 9. Disconnect from the Database
@@ -132,7 +190,7 @@ $db->disconnect();
 
 ## Error Handling and Logging
 
-The `dbcomms` class includes built-in error handling and logging. Errors are logged to a file (`error_log.txt`) with details about the error message, context, and timestamp. This helps in debugging and maintaining a history of issues encountered during database operations.
+The dbcomms class includes built-in error handling and logging. Errors are logged to a file (error_log.txt) with details about the error message, context, and timestamp. This helps in debugging and maintaining a history of issues encountered during database operations.
 
 ## Transaction Management
 

@@ -5,7 +5,7 @@ class dbcomms {
 
     // Protected properties for the PDO instance and error log file path
     protected $datab;
-    protected $errorLogFile = 'error_log.txt';
+    protected $errorLogFile = 'dbcomms.log';
 
     // Private property to track if a transaction is currently in progress
     private $transactionInProgress = false;
@@ -112,7 +112,14 @@ class dbcomms {
             return null;
         }
     
-        $query = $this->buildQuery('SELECT', $table, $conditions, $operators, 'LIMIT 1', $logicalOperator);
+        // Construct the SELECT query
+        $conditionStrings = [];
+        foreach ($conditions as $index => $condition) {
+            $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";
+        }
+        $whereClause = !empty($conditionStrings) ? " WHERE " . implode(" {$logicalOperator} ", $conditionStrings) : "";
+        $query = "SELECT * FROM `{$table}`{$whereClause} LIMIT 1";
+    
         $queryParams = $this->buildNamedParams($conditions, $params);
         return $this->executeQuery($query, $queryParams, true);
     }
@@ -123,6 +130,12 @@ class dbcomms {
             return null;
         }
     
+        // Construct the SELECT query
+        $conditionStrings = [];
+        foreach ($conditions as $index => $condition) {
+            $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";
+        }
+        $whereClause = !empty($conditionStrings) ? " WHERE " . implode(" {$logicalOperator} ", $conditionStrings) : "";
         $extra = "ORDER BY `{$orderBy}` {$ascOrDesc}";
         if ($limit !== null) {
             $extra .= " LIMIT {$limit}";
@@ -130,10 +143,124 @@ class dbcomms {
                 $extra .= " OFFSET {$offset}";
             }
         }
+        $query = "SELECT * FROM `{$table}`{$whereClause} {$extra}";
     
-        $query = $this->buildQuery('SELECT', $table, $conditions, $operators, $extra, $logicalOperator);
         $queryParams = $this->buildNamedParams($conditions, $params);
         return $this->executeQuery($query, $queryParams);
+    }
+
+    // Public method to update a row in a table based on conditions
+    public function updateRow($table, $column, $value, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
+        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Update')) {
+            return null;
+        }
+    
+        try {
+            $this->beginTransaction();
+    
+            // Construct the UPDATE query
+            $conditionStrings = [];
+            foreach ($conditions as $index => $condition) {
+                $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";
+            }
+            $whereClause = !empty($conditionStrings) ? " WHERE " . implode(" {$logicalOperator} ", $conditionStrings) : "";
+            $query = "UPDATE `{$table}` SET `{$column}` = :value{$whereClause}";
+    
+            $paramsArray = array_merge([':value' => $value], $this->buildNamedParams($conditions, $params));
+            $this->executeQuery($query, $paramsArray);
+            $this->commit();
+        } catch (PDOException $e) {
+            $this->handleError("Update failed", $e->getMessage(), [
+                'query' => $query,
+                'params' => $paramsArray
+            ], $e->getCode());
+            $this->rollBack();
+            return null;
+        }
+    }
+    
+    // Public method to delete rows from a table based on conditions
+    public function deleteRow($table, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
+        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Delete')) {
+            return null;
+        }
+    
+        try {
+            $this->beginTransaction();
+    
+            // Construct the DELETE query
+            $conditionStrings = [];
+            foreach ($conditions as $index => $condition) {
+                $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";
+            }
+            $whereClause = !empty($conditionStrings) ? " WHERE " . implode(" {$logicalOperator} ", $conditionStrings) : "";
+            $query = "DELETE FROM `{$table}`{$whereClause}";
+    
+            $queryParams = $this->buildNamedParams($conditions, $params);
+            $this->executeQuery($query, $queryParams);
+            $this->commit();
+        } catch (PDOException $e) {
+            $this->handleError("Delete failed", $e->getMessage(), [
+                'query' => $query,
+                'params' => $queryParams
+            ], $e->getCode());
+            $this->rollBack();
+            return null;
+        }
+    }
+
+    // Public method to count the number of rows matching conditions in a table
+    public function countRows($table, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
+        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Count rows')) {
+            return null;
+        }
+    
+        // Construct the COUNT query
+        $conditionStrings = [];
+        foreach ($conditions as $index => $condition) {
+            $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";
+        }
+        $whereClause = !empty($conditionStrings) ? " WHERE " . implode(" {$logicalOperator} ", $conditionStrings) : "";
+        $query = "SELECT COUNT(*) AS count FROM `{$table}`{$whereClause}";
+    
+        $queryParams = $this->buildNamedParams($conditions, $params);
+        $result = $this->executeQuery($query, $queryParams, true);
+    
+        if ($result === null) {
+            return $this->handleError("Count failed", "Query returned null", [
+                'query' => $query,
+                'params' => $queryParams
+            ]);
+        }
+    
+        return $result['count'];
+    }
+
+    // Public method to perform aggregate functions (SUM, AVG, etc.) on a column
+    public function getAggregate($table, $aggregateFunction, $column, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
+        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Get aggregate')) {
+            return null;
+        }
+    
+        // Construct the AGGREGATE query
+        $conditionStrings = [];
+        foreach ($conditions as $index => $condition) {
+            $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";
+        }
+        $whereClause = !empty($conditionStrings) ? " WHERE " . implode(" {$logicalOperator} ", $conditionStrings) : "";
+        $query = "SELECT {$aggregateFunction}(`{$column}`) AS aggregate FROM `{$table}`{$whereClause}";
+    
+        $queryParams = $this->buildNamedParams($conditions, $params);
+        $result = $this->executeQuery($query, $queryParams, true);
+    
+        if ($result === null) {
+            return $this->handleError("Aggregate failed", "Query returned null", [
+                'query' => $query,
+                'params' => $queryParams
+            ]);
+        }
+    
+        return $result['aggregate'];
     }
 
     // Public method to insert a new row into a table
@@ -168,144 +295,6 @@ class dbcomms {
         }
     }
 
-    // Public method to update a row in a table based on conditions
-    public function updateRow($table, $column, $value, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        // Validate inputs and parameter counts
-        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Update')) {
-            return null;
-        }
-    
-        try {
-            $this->beginTransaction();  // Start transaction
-    
-            // Build the WHERE clause dynamically using the buildQuery method
-            $whereClause = $this->buildQuery('', '', $conditions, $operators, '', $logicalOperator);
-    
-            // Prepare the UPDATE statement correctly
-            $query = "UPDATE `{$table}` SET `{$column}` = :value {$whereClause}";
-            
-            // Merge parameters for the SET and WHERE clauses
-            $paramsArray = array_merge([':value' => $value], $this->buildNamedParams($conditions, $params));
-    
-            $this->executeQuery($query, $paramsArray);  // Execute the update query
-            $this->commit();  // Commit transaction
-        } catch (PDOException $e) {
-            // Roll back transaction and handle errors
-            $this->handleError("Update failed", $e->getMessage(), [
-                'query' => $query,
-                'params' => $paramsArray
-            ], $e->getCode());
-            $this->rollBack();
-            return null;
-        }
-    }
-
-    // Public method to delete rows from a table based on conditions
-    public function deleteRow($table, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Delete')) {
-            return null;
-        }
-    
-        try {
-            $this->beginTransaction();
-            $query = $this->buildQuery('DELETE', $table, $conditions, $operators, '', $logicalOperator);
-            $queryParams = $this->buildNamedParams($conditions, $params);
-            $this->executeQuery($query, $queryParams);
-            $this->commit();
-        } catch (PDOException $e) {
-            $this->handleError("Delete failed", $e->getMessage(), [
-                'query' => $query,
-                'params' => $queryParams
-            ], $e->getCode());
-            $this->rollBack();
-            return null;
-        }
-    }
-
-    // Public method to count the number of rows matching conditions in a table
-    public function countRows($table, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Count rows')) {
-            return null;
-        }
-    
-        $query = $this->buildQuery('COUNT', $table, $conditions, $operators, '', $logicalOperator);
-        $queryParams = $this->buildNamedParams($conditions, $params);
-        $result = $this->executeQuery($query, $queryParams, true);
-    
-        if ($result === null) {
-            return $this->handleError("Count failed", "Query returned null", [
-                'query' => $query,
-                'params' => $queryParams
-            ]);
-        }
-    
-        return $result['count'];
-    }
-
-    // Public method to perform aggregate functions (SUM, AVG, etc.) on a column
-    public function getAggregate($table, $aggregateFunction, $column, $conditions = [], $operators = [], $params = [], $logicalOperator = 'AND') {
-        if (!$this->validateInputs($table, $conditions, $params) || !$this->validateCounts($conditions, $params, 'Get aggregate')) {
-            return null;
-        }
-    
-        $extra = "{$aggregateFunction}(`{$column}`) AS aggregate";
-        $query = $this->buildQuery('AGGREGATE', $table, $conditions, $operators, $extra, $logicalOperator);
-        $queryParams = $this->buildNamedParams($conditions, $params);
-        $result = $this->executeQuery($query, $queryParams, true);
-    
-        if ($result === null) {
-            return $this->handleError("Aggregate failed", "Query returned null", [
-                'query' => $query,
-                'params' => $queryParams
-            ]);
-        }
-    
-        return $result['aggregate'];
-    }
-
-    // Private method to build a dynamic SQL query
-    private function buildQuery($action, $table, $conditions = [], $operators = [], $extra = '', $logicalOperator = 'AND') {
-        // Initialize the query
-        $query = "";
-    
-        // Construct the base query depending on the action
-        switch ($action) {
-            case 'SELECT':
-                $query = "SELECT * FROM `{$table}`";  // Start building the SELECT query
-                break;
-            case 'COUNT':
-                $query = "SELECT COUNT(*) AS count FROM `{$table}`";  // Start building the COUNT query
-                break;
-            case 'AGGREGATE':
-                // For aggregate, the $extra should contain the aggregate function and column
-                $query = "SELECT {$extra} FROM `{$table}`";  // Build the aggregate query
-                break;
-            case 'DELETE':
-                $query = "DELETE FROM `{$table}`";  // Start building the DELETE query
-                break;
-            case 'UPDATE':
-                $query = "UPDATE `{$table}`";  // Start building the UPDATE query
-                break;
-            default:
-                return $this->handleError("Invalid action", "The action {$action} is not supported in buildQuery.");
-        }
-    
-        // Add conditions if provided
-        if (!empty($conditions)) {
-            $conditionStrings = [];
-    
-            foreach ($conditions as $index => $condition) {
-                $conditionStrings[] = "`{$condition}` {$operators[$index]} :{$condition}";  // Match named parameters
-            }
-    
-            // Add WHERE clause for conditions
-            $query .= " WHERE " . implode(" {$logicalOperator} ", $conditionStrings);
-        }
-    
-        // Append any additional clauses (like LIMIT, ORDER BY)
-        return trim("{$query} {$extra}");  // Return the complete query with any extra clauses, and trim any extra spaces
-    }
-
     // Private method to build named parameters for a prepared statement
     private function buildNamedParams($keys = [], $values = []) {
         $params = [];
@@ -317,22 +306,27 @@ class dbcomms {
         return $params;  // Return the parameters array
     }
 
-    // Private method to log errors to a file
-    private function logError($message, $context = []) {
-        $logMessage = date('Y-m-d H:i:s') . " - " . $message;  // Timestamp the error message
-        if (!empty($context)) {
-            $logMessage .= ' | Context: ' . json_encode($context);  // Add context if available
-        }
-        file_put_contents($this->errorLogFile, $logMessage . PHP_EOL, FILE_APPEND);  // Append error to log file
-    }
-
     // Private method to handle errors and optionally return structured error info
     private function handleError($message, $errorDetail, $context = [], $errorCode = null) {
+        // Prepare error context with SQL error code if available
         $logContext = $context;
         if ($errorCode !== null) {
-            $logContext['sql_error_code'] = $errorCode;  // Include SQL error code in context
+            $logContext['sql_error_code'] = $errorCode;
         }
-        $this->logError($message, $logContext);  // Log the error
+    
+        // Create a formatted error message
+        $formattedMessage = "=============== ERROR | " . date('Y-m-d H:i:s') . " ===============\n";
+        $formattedMessage .= "Error Message: " . $message . "\n";
+        $formattedMessage .= "Error Details: " . $errorDetail . "\n";
+        if (!empty($logContext)) {
+            $formattedMessage .= "Context: " . json_encode($logContext, JSON_PRETTY_PRINT) . "\n";
+        }
+        $formattedMessage .= "===========================================================\n\n";
+    
+        // Log the formatted message to the error log file
+        file_put_contents($this->errorLogFile, $formattedMessage, FILE_APPEND);
+    
+        // Return structured error info for further handling
         return [
             'success' => false,
             'message' => $message,
