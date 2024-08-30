@@ -1,6 +1,6 @@
 # dbcomms PHP Class
 
-**Version:** 1.5
+**Version:** 1.6
 
 **Author:** rlford ([https://github.com/rlford](https://github.com/rlford))
 
@@ -171,6 +171,55 @@ Ensure to disconnect from the database when operations are complete.
 
 ```php
 $db->disconnect();
+```
+
+## `getDb()` Method
+
+### How It Works
+
+- **Check for a Valid PDO Instance**: The method checks if the internal database connection (`$datab`) is an instance of the PDO class.
+- **Return the PDO Object**: If the connection is valid, `getDb()` returns the PDO instance, which can then be used to execute any SQL queries or commands.
+- **Return `null` if Not Connected**: If the connection is not established or fails, the method returns `null`, indicating that no database operations can be performed.
+
+### Use Cases
+
+The `getDb()` method is particularly useful in scenarios where predefined methods of the `dbcomms` class do not cover all the needs of the application. For example, if a developer needs to execute a complex SQL query with custom joins, aggregate functions, or perform advanced transaction management, they can use the PDO instance directly.
+
+### Example Usage
+
+Below is an example of how to use the `getDb()` method to perform a custom SQL query:
+
+```php
+<?php
+require_once("path/to/dbcomms.php");
+
+// Initialize the dbcomms class with your database credentials
+$dbcomms = new dbcomms('localhost', 'database_name', 'username', 'password');
+
+// Retrieve the PDO instance using the getDb() method
+$pdo = $dbcomms->getDb();
+
+if ($pdo) {
+    // Prepare a custom SQL query using the PDO instance
+    $sql = "SELECT name, email FROM users WHERE status = :status ORDER BY created_at DESC";
+
+    // Prepare the statement
+    $stmt = $pdo->prepare($sql);
+
+    // Execute the statement with bound parameters
+    $stmt->execute(['status' => 'active']);
+
+    // Fetch the results
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Display the results
+    echo "<pre>";
+    print_r($results);
+    echo "</pre>";
+} else {
+    echo "Unable to connect to the database.";
+}
+?>
 ```
 
 ## Error Handling and Logging
