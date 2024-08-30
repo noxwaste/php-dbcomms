@@ -38,6 +38,14 @@ class dbcomms {
         $this->transactionInProgress = false; // Reset transaction state on disconnect
     }
 
+    // Return the PDO instance so that we can do whatever custom queries we want
+    public function getDb() {
+        if ($this->datab instanceof PDO) {
+            return $this->datab; // Return the PDO instance
+        }
+        return null; // Return null if the PDO instance is not set
+    }
+
     // Private method to manage transactions (begin, commit, rollback)
     private function manageTransaction($action) {
         try {
