@@ -2,7 +2,7 @@
 
 **Version:** 1.6
 
-**Author:** rlford ([https://github.com/rlford](https://github.com/rlford))
+**Author:** noxwaste ([https://github.com/noxwaste](https://github.com/noxwaste))
 
 ## Overview
 
